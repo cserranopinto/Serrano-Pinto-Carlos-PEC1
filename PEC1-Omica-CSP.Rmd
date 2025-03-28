@@ -7,14 +7,13 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+options(tinytex.verbose = TRUE)
 ```
 
-## Elección de DataSet
-
-
+En este trabajo se realizará un análsis exploratorio de un estudio metabolómico, escogido desde la base de datos **[Metabolomics Workbench](https://www.metabolomicsworkbench.org/)**. Por otro lado, usaremos la librerías **[metabolomicsWorkbenchR](https://www.bioconductor.org/packages/release/bioc/html/metabolomicsWorkbenchR.html)** para extraer los datos directamente desde la web y **[SummarizedExperiment](https://www.bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html)** para manejar los datos de manera estructurada. ambas librerías se encuentran en el repositorio **[Bioconductor](https://www.bioconductor.org/install/)**. Para utilizar estas librerías, primero asegurarse de tener instalado Bioconductor y luego instalar metabolomicsWorkbenchR y SummarizedExperiment como indica en sus respectivos links.
 
 ## Importación de librería
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(metabolomicsWorkbenchR)
 library(SummarizedExperiment)
 ```
@@ -24,7 +23,7 @@ library(SummarizedExperiment)
 estudios = do_query(
     context = 'study',
     input_item = 'study_title',
-    input_value = 'Antibiotic',
+    input_value = 'Bacterial',
     output_item = 'summary'
 )
 
@@ -35,10 +34,10 @@ estudios = do_query(
 summary <- do_query(
     context = "study",
     input_item = "study_id",
-    input_value = "ST000733",
+    input_value = "ST003521",
     output_item = "summary"
 )
-print(summary)
+
 ```
 
 
@@ -48,26 +47,34 @@ print(summary)
 SE = do_query(
     context = 'study',
     input_item = 'study_id',
-    input_value = 'ST000733',
+    input_value = 'ST003521',
     output_item = 'SummarizedExperiment'
 )
 
-SE
+```
+```{r echo=TRUE}
+print(head(rowData(SE$AN005782)))
+#print(head(rowData(SE$AN005783)))
 ```
 
-```{r}
-colData(SE)
+
+
+```{r echo=TRUE}
+print(head(colData(SE$AN005782)))
+#print(head(colData(SE$AN005783)))
 ```
 
 
-```{r}
-rowData(SE)
+
+```{r echo=TRUE}
+print(head(metadata(SE$AN005782)))
+#print(head(metadata(SE$AN005783)))
 ```
 
-```{r}
-metadata(SE)
+```{r echo=TRUE}
+print(head(assay(SE$AN005782)))
+#print(head(assay(SE$AN005783)))
 ```
-
 
 
 
