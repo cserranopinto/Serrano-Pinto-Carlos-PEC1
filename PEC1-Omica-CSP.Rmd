@@ -1,0 +1,74 @@
+---
+title: "PEC1"
+author: "cserrano"
+date: "2025-03-25"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Elección de DataSet
+
+
+
+## Importación de librería
+```{r}
+library(metabolomicsWorkbenchR)
+library(SummarizedExperiment)
+```
+
+## Estudios Disponibles
+```{r}
+estudios = do_query(
+    context = 'study',
+    input_item = 'study_title',
+    input_value = 'Antibiotic',
+    output_item = 'summary'
+)
+
+```
+
+## Summary de estudio seleccionado
+```{r}
+summary <- do_query(
+    context = "study",
+    input_item = "study_id",
+    input_value = "ST000733",
+    output_item = "summary"
+)
+print(summary)
+```
+
+
+
+## Carga de Datos en clase SummarizedExperiment
+```{r echo=TRUE}
+SE = do_query(
+    context = 'study',
+    input_item = 'study_id',
+    input_value = 'ST000733',
+    output_item = 'SummarizedExperiment'
+)
+
+SE
+```
+
+```{r}
+colData(SE)
+```
+
+
+```{r}
+rowData(SE)
+```
+
+```{r}
+metadata(SE)
+```
+
+
+
+
+
