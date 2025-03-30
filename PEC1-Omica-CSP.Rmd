@@ -10,12 +10,15 @@ knitr::opts_chunk$set(echo = TRUE)
 options(tinytex.verbose = TRUE)
 ```
 
-En este trabajo se realizará un análsis exploratorio de un estudio metabolómico, escogido desde la base de datos **[Metabolomics Workbench](https://www.metabolomicsworkbench.org/)**. Por otro lado, usaremos la librerías **[metabolomicsWorkbenchR](https://www.bioconductor.org/packages/release/bioc/html/metabolomicsWorkbenchR.html)** para extraer los datos directamente desde la web y **[SummarizedExperiment](https://www.bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html)** para manejar los datos de manera estructurada. ambas librerías se encuentran en el repositorio **[Bioconductor](https://www.bioconductor.org/install/)**. Para utilizar estas librerías, primero asegurarse de tener instalado Bioconductor y luego instalar metabolomicsWorkbenchR y SummarizedExperiment como indica en sus respectivos links.
+En este trabajo se realizará un análsis exploratorio de un estudio metabolómico, escogido desde la base de datos **[Metabolomics Workbench](https://www.metabolomicsworkbench.org/)**. Por otro lado, usaremos la librería **[metabolomicsWorkbenchR](https://www.bioconductor.org/packages/release/bioc/html/metabolomicsWorkbenchR.html)** para extraer los datos directamente desde la web y **[SummarizedExperiment](https://www.bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html)** para manejar los datos de manera estructurada. Ambas librerías se encuentran en el repositorio **[Bioconductor](https://www.bioconductor.org/install/)**. Para utilizar estas librerías, primero asegurarse de tener instalado Bioconductor y luego instalar metabolomicsWorkbenchR y SummarizedExperiment como indica en sus respectivos links.
 
 ## Importación de librería
 ```{r message=FALSE, warning=FALSE}
 library(metabolomicsWorkbenchR)
 library(SummarizedExperiment)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
 ```
 
 ## Estudios Disponibles
@@ -44,7 +47,7 @@ summary <- do_query(
 
 ## Carga de Datos en clase SummarizedExperiment
 ```{r echo=TRUE}
-SE = do_query(
+se_list = do_query(
     context = 'study',
     input_item = 'study_id',
     input_value = 'ST003521',
@@ -52,29 +55,178 @@ SE = do_query(
 )
 
 ```
+
+
 ```{r echo=TRUE}
-print(head(rowData(SE$AN005782)))
+#print(head(rowData(SE$AN005782)))
 #print(head(rowData(SE$AN005783)))
 ```
 
 
 
 ```{r echo=TRUE}
-print(head(colData(SE$AN005782)))
+#print(head(colData(SE$AN005782)))
 #print(head(colData(SE$AN005783)))
 ```
 
 
 
 ```{r echo=TRUE}
-print(head(metadata(SE$AN005782)))
+#print(head(metadata(SE$AN005782)))
 #print(head(metadata(SE$AN005783)))
 ```
 
 ```{r echo=TRUE}
-print(head(assay(SE$AN005782)))
+#print(head(assay(SE$AN005782)))
 #print(head(assay(SE$AN005783)))
 ```
+
+```{r}
+#matriz_1 <- assay(SE$AN005782)
+#matriz_2 <- assay(SE$AN005783)
+```
+
+
+```{r}
+library(SummarizedExperiment)
+
+# Assuming your first SummarizedExperiment object is called 'se1'
+average_replicates <- function(se) {
+  # Get the assay data
+  assay_data <- assay(se)
+  col_names <- colnames(assay_data)
+  
+  # Identify replicate groups by removing "_N" suffix
+  base_groups <- sub("_\\d+$", "", col_names)
+  unique_groups <- unique(base_groups)
+  
+  # Initialize matrix for averaged data
+  averaged_data <- matrix(nrow = nrow(assay_data), ncol = length(unique_groups))
+  rownames(averaged_data) <- rownames(assay_data)
+  colnames(averaged_data) <- unique_groups
+  
+  # Calculate averages for each group
+  for (group in unique_groups) {
+    group_cols <- which(base_groups == group)
+    if (length(group_cols) > 1) {
+      averaged_data[, group] <- rowMeans(assay_data[, group_cols, drop = FALSE], na.rm = TRUE)
+    } else {
+      averaged_data[, group] <- assay_data[, group_cols]
+    }
+  }
+  
+  # Create a new SummarizedExperiment with the averaged data
+  new_se <- SummarizedExperiment(
+    assays = list(averaged = averaged_data),
+    colData = DataFrame(sample = unique_groups),
+    rowData = rowData(se)
+  )
+  
+  return(new_se)
+}
+
+se1 <- se_list$AN005782
+
+# Apply to your first SummarizedExperiment object
+se1_averaged <- average_replicates(se1)
+
+# Verify the dimensions
+dim(se1_averaged)
+```
+
+
+
+
+```{r}
+library(SummarizedExperiment)
+library(dplyr)
+library(stringr)
+
+# Supongamos que `se_list` es la lista que contiene los objetos SummarizedExperiment
+se1 <- se_list[[1]]  # Tomamos el primer objeto
+
+# Extraer la matriz de datos
+data_matrix <- assay(se1)
+
+# Obtener los nombres de las columnas
+column_names <- colnames(data_matrix)
+
+# Identificar los nombres base de los replicados (sin el "_N")
+base_names <- unique(gsub("_\\d+$", "", column_names))
+
+# Crear un dataframe vacío para almacenar los datos promediados
+averaged_data <- data.frame(matrix(nrow = nrow(data_matrix)))
+
+# Iterar sobre los nombres base y calcular el promedio de los replicados
+for (name in base_names) {
+  # Filtrar las columnas correspondientes al replicado
+  matching_cols <- column_names[grepl(paste0("^", name, "_\\d+$"), column_names)]
+  
+  # Calcular el promedio de los replicados para cada fila
+  averaged_data[, name] <- apply(data_matrix[, ..matching_cols, drop = FALSE], 1, mean, na.rm = TRUE)
+}
+
+# Asegurarse de que la primera columna (si no tiene replicados) se mantenga igual
+#averaged_data[, 1] <- data_matrix[, 1]
+names(averaged_data)[1] <- names(data_matrix)[1]
+
+averaged_data_fix <- select(averaged_data, -Blank_1)
+
+```
+
+```{r}
+# Suponiendo que `se` es el objeto SummarizedExperiment
+se1 <- se_list$AN005782
+data <- as.data.frame(assay(se1))
+#data <-  averaged_data_fix
+
+# Seleccionar columnas que terminan en '_6h'
+cols_6h <- grep("_6h$", colnames(data), value = TRUE)
+data_6h <- data %>% select(all_of(cols_6h))
+
+# Obtener información de las condiciones experimentales
+metadata <- colData(se1) %>% as.data.frame()
+metadata_6h <- metadata %>% filter(grepl("_6h$", rownames(metadata)))
+
+# Agregar información de condición a los datos
+data_6h_tidy <- data_6h %>% 
+  mutate(metabolite = rownames(.)) %>% 
+  pivot_longer(cols = -metabolite, names_to = "sample", values_to = "value") %>% 
+  left_join(metadata_6h, by = c("sample" = "rownames(metadata)"))
+
+# Estadísticas descriptivas
+summary_stats <- data_6h_tidy %>% 
+  group_by(metabolite, condition) %>% 
+  summarise(mean = mean(value, na.rm = TRUE), 
+            sd = sd(value, na.rm = TRUE), 
+            .groups = "drop")
+
+# Comparación entre condiciones
+if (length(unique(metadata_6h$condition)) > 1) {
+  comparison_results <- data_6h_tidy %>% 
+    group_by(metabolite) %>% 
+    summarise(p_value = t.test(value ~ condition, data = .)$p.value, .groups = "drop") %>% 
+    mutate(adj_p_value = p.adjust(p_value, method = "BH"))
+} else {
+  comparison_results <- data.frame(metabolite = unique(data_6h_tidy$metabolite), 
+                                   p_value = NA, adj_p_value = NA)
+}
+
+# Guardar resultados
+write.csv(summary_stats, "summary_stats_6h.csv", row.names = FALSE)
+write.csv(comparison_results, "comparison_results_6h.csv", row.names = FALSE)
+
+# Visualización de algunos metabolitos seleccionados
+ggplot(data_6h_tidy, aes(x = condition, y = value, fill = condition)) +
+  geom_boxplot() +
+  facet_wrap(~ metabolite, scales = "free") +
+  theme_minimal() +
+  labs(title = "Comparación de niveles de metabolitos a las 6 horas")
+```
+
+
+
+
 
 
 
