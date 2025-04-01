@@ -12,9 +12,10 @@ knitr::opts_chunk$set(echo = TRUE)
 options(tinytex.verbose = TRUE)
 ```
 
-En este trabajo se realizará un análsis exploratorio de un estudio metabolómico, escogido desde la base de datos **[Metabolomics Workbench](https://www.metabolomicsworkbench.org/)**. Por otro lado, usaremos la librería **[metabolomicsWorkbenchR](https://www.bioconductor.org/packages/release/bioc/html/metabolomicsWorkbenchR.html)** para extraer los datos directamente desde la web y **[SummarizedExperiment](https://www.bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html)** para manejar los datos de manera estructurada. Ambas librerías se encuentran en el repositorio **[Bioconductor](https://www.bioconductor.org/install/)**. Para utilizar estas librerías, primero asegurarse de tener instalado Bioconductor y luego instalar metabolomicsWorkbenchR y SummarizedExperiment como indica en sus respectivos links.
+En este trabajo se realizará un análsis exploratorio de un estudio metabolómico, escogido desde la base de datos [**Metabolomics Workbench**](https://www.metabolomicsworkbench.org/). Por otro lado, usaremos la librería [**metabolomicsWorkbenchR**](https://www.bioconductor.org/packages/release/bioc/html/metabolomicsWorkbenchR.html) para extraer los datos directamente desde la web y [**SummarizedExperiment**](https://www.bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html) para manejar los datos de manera estructurada. Ambas librerías se encuentran en el repositorio [**Bioconductor**](https://www.bioconductor.org/install/). Para utilizar estas librerías, primero asegurarse de tener instalado Bioconductor y luego instalar metabolomicsWorkbenchR y SummarizedExperiment como indica en sus respectivos links.
 
 En esta sección, importamos las librerías necesarias que utilizaremos a lo largo de este trabajo
+
 ```{r message=FALSE, warning=FALSE}
 library(metabolomicsWorkbenchR)
 library(SummarizedExperiment)
@@ -22,9 +23,14 @@ library(knitr)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(ComplexHeatmap)
+library(stringr)
+library(tibble)
+
 ```
 
 La librería **metabolomicsWorkbenchR** permite realizar consultas a directamente a su página web. Aquí se utiliza la función do_query para solicitar información de estudios, precisamente con la palabra Bacterial.
+
 ```{r}
 estudios = do_query(
     context = 'study',
@@ -35,20 +41,20 @@ estudios = do_query(
 
 ```
 
-El resultado fue almacenado en la variable estudios, la cual se puede visualizar como una tabla. Aquí se muestran los primeros 10 resultados de la consulta.
-\tiny
+El resultado fue almacenado en la variable estudios, la cual se puede visualizar como una tabla. Aquí se muestran los primeros resultados de la consulta. \tiny
+
 ```{r}
 kable(head(estudios))
 ```
+
 \normalsize
 
-
-Teniendo estas alternativas de interés, se decidio seleccionar el estudio ST003521. La justificación de este estudio es mi relación al estudio de microbiología y genes de resistencia. Además, este estudio pudo ser obtenido por los métodos que aquí se muestran y asociarlo con una publicación para mayor información (Se pobraron otros estudios con la misma metodología y varios fallaban). Para mayor información, se puede visitar directamente el estudio **[ST003521](https://www.metabolomicsworkbench.org/data/DRCCMetadata.php?Mode=Study&StudyID=ST003521&StudyType=MS&ResultType=1)** en su página web.
+Teniendo estas alternativas de interés, se decidió seleccionar el estudio ST003521. La justificación de este estudio es mi relación al estudio de microbiología y genes de resistencia. Además, este estudio pudo ser obtenido por los métodos que aquí se muestran y asociarlo con una publicación para mayor información (Se pobraron otros estudios con la misma metodología y varios fallaban). Para mayor información, se puede visitar directamente el estudio [**ST003521**](https://www.metabolomicsworkbench.org/data/DRCCMetadata.php?Mode=Study&StudyID=ST003521&StudyType=MS&ResultType=1) en su página web.
 
 A continuación se procede a obtener los datos del estudio. Primero se obtendrá el summary del estudio. En la función do_query, se especifíca el estudio que al que se quiere acceder, mientras que en output_item se indica "summary"
 
-
 ## Summary de estudio seleccionado
+
 ```{r echo=TRUE}
 summary <- do_query(
     context = "study",
@@ -58,7 +64,7 @@ summary <- do_query(
 
 ```
 
-Dentro de los campos disponibles en summary se encuentran: "study_id", "study_title", "species", "institute", "analysis_type", "number_of_samples", "study_type"        "department", "last_name", "first_name", "email", "phone", "submit_date", "study_summary", "subject_species". En este caso en particular, solo están disponible los siguientes campos.
+Dentro de los campos disponibles en summary se encuentran: "study_id", "study_title", "species", "institute", "analysis_type", "number_of_samples", "study_type" "department", "last_name", "first_name", "email", "phone", "submit_date", "study_summary", "subject_species". En este caso en particular, solo están disponible los siguientes campos.
 
 ```{r echo=TRUE}
 
@@ -70,12 +76,13 @@ cat("Tipo de análisis: ", summary$analysis_type,"\n")
 cat("Número de muestras: ", summary$number_of_samples,"\n")
 
 ```
-A continuación se obtienen los datos del estudio. Para ello se indica su ID, y en output_item se indicará salida de tipo "SummarizedExperiment". De esta manera, los datos se obtendrán en formato del objeto **[SummarizedExperiment](https://www.bioconductor.org/packages/devel/bioc/vignettes/SummarizedExperiment/inst/doc/SummarizedExperiment.html)**, el cuál permite contener mucha información del estudio de manera estructurada dentro del mismo objeto.
+
+A continuación se obtienen los datos del estudio. Para ello se indica su ID, y en output_item se indicará salida de tipo "SummarizedExperiment". De esta manera, los datos se obtendrán en formato del objeto [**SummarizedExperiment**](https://www.bioconductor.org/packages/devel/bioc/vignettes/SummarizedExperiment/inst/doc/SummarizedExperiment.html), el cuál permite contener mucha información del estudio de manera estructurada dentro del mismo objeto.
 
 En este caso, al obtener los datos, se obtiene una lista con 2 elementos SummarizedExperiment.Estos se almacenarán en variable llamada se_list
 
-
 ## Carga de Datos en clase SummarizedExperiment
+
 ```{r echo=TRUE}
 se_list = do_query(
     context = 'study',
@@ -93,14 +100,11 @@ for (se in se_list)
 n = n+1}
 ```
 
-Exploraremos cada una de las matrices que contiene el objeto SummarizedExperiment. A continuación, una imagen representativa obtenida directamente desde la **[documentación de la librería](https://www.bioconductor.org/packages/devel/bioc/vignettes/SummarizedExperiment/inst/doc/SummarizedExperiment.html)**. 
+Exploraremos cada una de las matrices que contiene el objeto SummarizedExperiment. A continuación, una imagen representativa obtenida directamente desde la [**documentación de la librería**](https://www.bioconductor.org/packages/devel/bioc/vignettes/SummarizedExperiment/inst/doc/SummarizedExperiment.html).
 
-![](SummarizedExperiment-esquema.png){width=width height=height}
+![](SummarizedExperiment-esquema.png){width="width" height="height"}
 
-
-Observaremos la matriz 'assay'. Lo haremos con el primer elemento de los datos, pero se pueden realizar las mismas acciones con ambos. Para ello utilizamos la funcion assay() y tomamos un subset para visualizar los primeros resultados tanto de filas como de columnas.
-Observamos también las dimensiones del dataset, donde obtenemos que este objeto consta de 513 filas y 58 columnas.
-
+Observaremos la matriz 'assay'. Lo haremos con el primer elemento de los datos, pero se pueden realizar las mismas acciones con ambos. Para ello utilizamos la funcion assay() y tomamos un subset para visualizar los primeros resultados tanto de filas como de columnas. Observamos también las dimensiones del dataset, donde obtenemos que este objeto consta de 513 filas y 58 columnas.
 
 ```{r echo=TRUE}
 
@@ -108,57 +112,56 @@ se1 <- se_list$AN005782
 se2 <- se_list$AN005783
 cat('Dimensiones:\n Filas: ',dim(assay(se1))[1], '\n', 'Columnas: ', dim(assay(se1))[2])
 ```
-\tiny
-```{r}
-kable(assay(se1)[1:10,1:5])
-```
-\normalsize
 
+\tiny
+
+```{r}
+kable(assay(se1)[1:10,5:10])
+```
+
+\normalsize
 
 Ahora observaremos específicamente la matriz de Features ( o Rows). Accedemos a ellas mediante la función rowData(). Al igual que antes, solo se mostrarán los primeros resultados para evitar extender demasiado el documento.
 
 Aquó observamos que las dimensiones de esta matriz es de 513 filas y 3 columnas. Aquí se muestran los valores de metabolitos denotados con ids pero también con su nombre químico. Las columnas que se encuentran son: "metabolite_name", "metabolite_id" y "refmet_name"
-
 
 ```{r echo=TRUE}
 cat('Dimensiones:\n Filas: ',dim(rowData(se1))[1], '\n', 'Columnas: ', dim(rowData(se1))[2])
 ```
 
 \tiny
+
 ```{r echo=TRUE}
-kable(rowData(se1)[1:10,1:3])
+kable(rowData(se1)[1:10,])
 ```
+
 \normalsize
 
+Ahora revisamos la matriz Samples. Para ello accedemos con la función colData(). En este caso, las dimensiones son 58 filas y 7 columnas. Notar que ahora las filas corresponden a las columnas de la matriz assay. Las columnas de esta matriz corresponden a: "local_sample_id", "study_id", "sample_source", "mb_sample_id", "raw_data", "Sample_source", "raw_file_name".
 
-Ahora revisamos la matriz Samples. Para ello accedemos con la función colData(). En este caso, las dimensiones son 58 filas y 7 columnas. Notar que ahora las filas corresponden a las columnas de la matriz assay. Las columnas de esta matriz corresponden a: "local_sample_id", "study_id",	"sample_source",	"mb_sample_id",	"raw_data",	"Sample_source",	"raw_file_name".
-
-Los nombres que se observan en assay corresponden a local_sample_id. Se asume que el último sufijo "_N" corresponde al número de replicado de la muestra.
-En sample_source se muestra el nombre más descriptivo de la muestra.  En mb_sample_id se tienen códigos de especies bacterianas. Todas corresponden a Acinetobacter baumannii ATCC 19606.
-
+Los nombres que se observan en assay corresponden a local_sample_id. Se asume que el último sufijo "\_N" corresponde al número de replicado de la muestra. En sample_source se muestra el nombre más descriptivo de la muestra. En mb_sample_id se tienen códigos de especies bacterianas. Todas corresponden a Acinetobacter baumannii ATCC 19606.
 
 ```{r echo=TRUE}
 cat('Dimensiones:\n Filas: ',dim(colData(se1))[1], '\n', 'Columnas: ', dim(colData(se1))[2])
 ```
 
 \tiny
+
 ```{r echo=TRUE}
 kable(head(colData(se1)))
 ```
+
 \normalsize
 
-
-Por último, exploramos la metadata del estudio. Para ello usamos la función metadata(). Esto nos entrega una lista con información.
-Aquí observamos la base de datos de donde se obtuvieron los datos, el id del estudio, el id del análsis (Este estudio tiene 2 análisis), el tipo de análsis (HILIC POSITIVE ION MODE corresponde a un modo en HPLC. Segundo análisis corresponde a HILIC NEGATIVE ION MODE), la unidad de medida y la descripción del estudio.
-
+Por último, exploramos la metadata del estudio. Para ello usamos la función metadata(). Esto nos entrega una lista con información. Aquí observamos la base de datos de donde se obtuvieron los datos, el id del estudio, el id del análsis (Este estudio tiene 2 análisis), el tipo de análsis (HILIC POSITIVE ION MODE corresponde a un modo en HPLC. Segundo análisis corresponde a HILIC NEGATIVE ION MODE), la unidad de medida y la descripción del estudio.
 
 ```{r echo=TRUE}
 metadata(se1)
 ```
 
-Ahora, teniendo mayor información de cómo se estructuran los datos y cual es el contexto del estudio, procederemos a explorar como darle un sentido a ellos. 
+Ahora, teniendo mayor información de cómo se estructuran los datos y cual es el contexto del estudio, procederemos a explorar como darle un sentido a ellos.
 
-Observamos anteriormente que las columnas de las muestras presentaban un sufijo '_N', el cual indica el número de réplica, por lo que una opción será agrupar las columnas con nombre equivalente y luego promediar sus valores para cada metabolito (filas)
+Observamos anteriormente que las columnas de las muestras presentaban un sufijo '\_N', el cual indica el número de réplica, por lo que una opción será agrupar las columnas con nombre equivalente y luego promediar sus valores para cada metabolito (filas)
 
 Primero creamos un dataframe con la matriz del experimento 1 y seleccionamos los nombres del experimento 1. Para ello seleccionaremos los nombres descriptivos de las muestras en matriz colData. Generamos una lista unica de muestras, las que usaremos para identificar qué columnas se usarán para obtener promedio
 
@@ -202,20 +205,125 @@ for (name in unicos2) {
 
 Ahora, teniendo las matrices con promdeios de ambos objetos provenientes de summarizedexperiment, concatenamos los dataframes antes creados en uno solo
 
-
 ```{r echo=TRUE}
 data_avg <- rbind(data_avg1, data_avg2)
 ```
 
-\tiny 
+\tiny
+
 ```{r echo=TRUE}
-kable(data_avg[1:10,1:5])
+kable(data_avg[1:10,1:6])
 ```
+
 \normalsize
 
+A continuación, trabajaremos los cambios en las mediciones de los distintos metabolitos. Para ello, deberemos calcular el cambio de cada metabolito respecto a una condición, en este caso, compararemos las mediciones de las distintas condiciones respecto a la condición control. Extraeremos de nuestros datos las columnas '_BLANK_' y '_QC_'
+
+```{r }
+drops <- c("_BLANK_" , "_QC_")
+data_avg <- data_avg[ , !(names(data_avg) %in% drops)]
+```
+
+Ahora determinaros el cambio entre condicion normal y condicion experimetal. Esto se puede calcular como  $FoldChange$ $(FC)$ o en $log_{2}FoldChange$ $log_{2}(FC)$, el cual se calcula como:
+
+$$
+FC = \frac{Condicion Experimental}{Condicion Control} 
+$$
+
+$$
+log_{2}(FC) = log_{2}(\frac{Condicion Experimental}{Condicion Control} )
+$$
+Calcularemos $log_{2}(FC)$ puesto que en el estudio de este trabajo se realizó así. Esto permitirá comparar con los resultados del artículo.
+
+```{r echo=TRUE}
+names(data_avg) <- gsub(" ", "", names(data_avg))
+names(data_avg) <- gsub("-", "", names(data_avg))
+drops <- c("Control_1h","Control_3h","Control_6h")
+log2FC_data <- data_avg[ , !(names(data_avg) %in% drops)]
+
+# Calcular log2 Fold Change para cada condición y tiempo
+log2FC_data$Combination_1h <- log2(data_avg$Combination_1h / data_avg$Control_1h)
+log2FC_data$Combination_3h <- log2(data_avg$Combination_3h / data_avg$Control_3h)
+log2FC_data$Combination_6h <- log2(data_avg$Combination_6h / data_avg$Control_6h)
+
+log2FC_data$PolymyxinB_1h <- log2(data_avg$PolymyxinB_1h / data_avg$Control_1h)
+log2FC_data$PolymyxinB_3h <- log2(data_avg$PolymyxinB_3h / data_avg$Control_3h)
+log2FC_data$PolymyxinB_6h <- log2(data_avg$PolymyxinB_6h / data_avg$Control_6h)
+
+log2FC_data$Leu10teixobactin_1h <- log2(data_avg$'Leu10teixobactin_1h' / data_avg$Control_1h)
+log2FC_data$Leu10teixobactin_3h <- log2(data_avg$'Leu10teixobactin_3h' / data_avg$Control_3h)
+log2FC_data$Leu10teixobactin_6h <- log2(data_avg$'Leu10teixobactin_6h' / data_avg$Control_6h)
+
+# Reemplazar valores infinitos o NaN con NA
+log2FC_data <- log2FC_data %>% mutate(across(everything(), ~ ifelse(is.infinite(.) | is.nan(.), NA, .)))
+
+log2FC_data <- log2FC_data %>% replace(is.na(.), 0)
+
+new_order = c("Combination_1h","PolymyxinB_1h","Leu10teixobactin_1h","Combination_3h","PolymyxinB_3h","Leu10teixobactin_3h","Combination_6h","PolymyxinB_6h","Leu10teixobactin_6h")
+log2FC_data <- log2FC_data[, new_order]
+```
 
 
 
 
+
+```{r echo=TRUE}
+library(ComplexHeatmap)
+library(dplyr)
+
+# Ordenamos las columnas agrupando por tiempo
+log2FC_data <- log2FC_data %>%
+  select(ends_with("_1h"), ends_with("_3h"), ends_with("_6h"))
+
+small_set <- log2FC_data[1:100,]
+
+# Convertir a matriz
+matrix_FC <- as.matrix(small_set)
+
+# Crear el heatmap con ajustes para visualización
+Heatmap(matrix_FC,
+        name = 'log2(FC)',
+        cluster_rows = TRUE,
+        show_row_dend = FALSE ,
+        cluster_columns = FALSE,    # No agrupar columnas (se mantienen en orden por tiempo)
+        column_split = rep(c("1h", "3h", "6h"), each = ncol(matrix_FC) / 3),
+        border = TRUE, 
+        row_names_side = "left",   # Mueve etiquetas de filas a la izq
+        row_names_gp = gpar(fontsize = 2),
+        column_names_gp = gpar(fontsize = 4),
+        column_title_gp = gpar(fontsize = 4, fontface = "bold"),# Ajusta tamaño de texto de las etiquetas
+        heatmap_height = unit(11, "cm"),  # Hace el heatmap más largo
+        heatmap_width = unit(8, "cm")    # Ajusta el ancho
+)
+```
+
+
+
+```{r echo=TRUE}
+
+df_long <- log2FC_data %>%
+  rownames_to_column("Metabolite") %>%
+  pivot_longer(cols = -Metabolite, names_to = "Condition", values_to = "log2FC")
+
+condition_1h <- df_long %>%
+  filter(str_detect(Condition, "_1h"))
+
+df_short <- condition_1h[1:150,]
+
+df_short$Group <- case_when(
+  grepl("Polymyxin", df_short$Condition) ~ "Polymyxin",
+  grepl("Leu10teixobactin", df_short$Condition) ~ "Leu10-teixobactin",
+  grepl("Combination", df_short$Condition) ~ "Combination")
+
+
+ggplot(df_short, aes(x = log2FC, y = Metabolite, color = Group)) +
+  geom_bar(stat = "identity", position = "identity", fill = "white", linewidth = 0.1) +
+  scale_color_manual(values = c("Polymyxin" = "blue", "Leu10-teixobactin" = "red", "Combination" = "purple")) +
+  theme_minimal() +
+  labs(x = "log2(FC)", y = "", color = "") +
+  theme(axis.text.y = element_text(size = 6))
+
+
+```
 
 
