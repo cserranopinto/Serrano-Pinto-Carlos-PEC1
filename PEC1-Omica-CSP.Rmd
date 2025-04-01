@@ -36,10 +36,11 @@ estudios = do_query(
 ```
 
 El resultado fue almacenado en la variable estudios, la cual se puede visualizar como una tabla. Aquí se muestran los primeros 10 resultados de la consulta.
-
+\tiny
 ```{r}
 kable(head(estudios))
 ```
+\normalsize
 
 
 Teniendo estas alternativas de interés, se decidio seleccionar el estudio ST003521. La justificación de este estudio es mi relación al estudio de microbiología y genes de resistencia. Además, este estudio pudo ser obtenido por los métodos que aquí se muestran y asociarlo con una publicación para mayor información (Se pobraron otros estudios con la misma metodología y varios fallaban). Para mayor información, se puede visitar directamente el estudio **[ST003521](https://www.metabolomicsworkbench.org/data/DRCCMetadata.php?Mode=Study&StudyID=ST003521&StudyType=MS&ResultType=1)** en su página web.
@@ -53,8 +54,7 @@ summary <- do_query(
     context = "study",
     input_item = "study_id",
     input_value = "ST003521",
-    output_item = "summary"
-)
+    output_item = "summary")
 
 ```
 
@@ -98,7 +98,7 @@ Exploraremos cada una de las matrices que contiene el objeto SummarizedExperimen
 ![](SummarizedExperiment-esquema.png){width=width height=height}
 
 
-Observaremos la matriz 'assay'. Lo haremos con el primer elemento de los datos, pero se pueden realizar las mismas acciones con ambos. Para ello utilizamos la funcion assay() y usamos head para visualizar los primeros resultados.
+Observaremos la matriz 'assay'. Lo haremos con el primer elemento de los datos, pero se pueden realizar las mismas acciones con ambos. Para ello utilizamos la funcion assay() y tomamos un subset para visualizar los primeros resultados tanto de filas como de columnas.
 Observamos también las dimensiones del dataset, donde obtenemos que este objeto consta de 513 filas y 58 columnas.
 
 
@@ -106,10 +106,13 @@ Observamos también las dimensiones del dataset, donde obtenemos que este objeto
 
 se1 <- se_list$AN005782
 se2 <- se_list$AN005783
-
-kable(head(assay(se1)))
 cat('Dimensiones:\n Filas: ',dim(assay(se1))[1], '\n', 'Columnas: ', dim(assay(se1))[2])
 ```
+\tiny
+```{r}
+kable(assay(se1)[1:10,1:5])
+```
+\normalsize
 
 
 Ahora observaremos específicamente la matriz de Features ( o Rows). Accedemos a ellas mediante la función rowData(). Al igual que antes, solo se mostrarán los primeros resultados para evitar extender demasiado el documento.
@@ -118,9 +121,15 @@ Aquó observamos que las dimensiones de esta matriz es de 513 filas y 3 columnas
 
 
 ```{r echo=TRUE}
-kable(head(rowData(se1)))
 cat('Dimensiones:\n Filas: ',dim(rowData(se1))[1], '\n', 'Columnas: ', dim(rowData(se1))[2])
 ```
+
+\tiny
+```{r echo=TRUE}
+kable(rowData(se1)[1:10,1:3])
+```
+\normalsize
+
 
 Ahora revisamos la matriz Samples. Para ello accedemos con la función colData(). En este caso, las dimensiones son 58 filas y 7 columnas. Notar que ahora las filas corresponden a las columnas de la matriz assay. Las columnas de esta matriz corresponden a: "local_sample_id", "study_id",	"sample_source",	"mb_sample_id",	"raw_data",	"Sample_source",	"raw_file_name".
 
@@ -129,157 +138,82 @@ En sample_source se muestra el nombre más descriptivo de la muestra.  En mb_sam
 
 
 ```{r echo=TRUE}
-kable(head(colData(se1)))
 cat('Dimensiones:\n Filas: ',dim(colData(se1))[1], '\n', 'Columnas: ', dim(colData(se1))[2])
 ```
 
+\tiny
+```{r echo=TRUE}
+kable(head(colData(se1)))
+```
+\normalsize
+
+
 Por último, exploramos la metadata del estudio. Para ello usamos la función metadata(). Esto nos entrega una lista con información.
+Aquí observamos la base de datos de donde se obtuvieron los datos, el id del estudio, el id del análsis (Este estudio tiene 2 análisis), el tipo de análsis (HILIC POSITIVE ION MODE corresponde a un modo en HPLC. Segundo análisis corresponde a HILIC NEGATIVE ION MODE), la unidad de medida y la descripción del estudio.
 
 
 ```{r echo=TRUE}
 metadata(se1)
 ```
 
-#####
+Ahora, teniendo mayor información de cómo se estructuran los datos y cual es el contexto del estudio, procederemos a explorar como darle un sentido a ellos. 
 
+Observamos anteriormente que las columnas de las muestras presentaban un sufijo '_N', el cual indica el número de réplica, por lo que una opción será agrupar las columnas con nombre equivalente y luego promediar sus valores para cada metabolito (filas)
 
+Primero creamos un dataframe con la matriz del experimento 1 y seleccionamos los nombres del experimento 1. Para ello seleccionaremos los nombres descriptivos de las muestras en matriz colData. Generamos una lista unica de muestras, las que usaremos para identificar qué columnas se usarán para obtener promedio
 
-```{r}
-library(SummarizedExperiment)
+```{r echo=TRUE}
+data_df1 <- as.data.frame(assay(se1))
+col_names1 <- se1@colData$sample_source
+row_names1 <- se1@elementMetadata$metabolite_name
 
-# Assuming your first SummarizedExperiment object is called 'se1'
-average_replicates <- function(se) {
-  # Get the assay data
-  assay_data <- assay(se)
-  col_names <- colnames(assay_data)
+colnames(data_df1) <- col_names1 # Se asigan nombres de columnas a dataframe
+rownames(data_df1) <- row_names1 # Se asigan nombres de filas a dataframe
+
+unicos1 <- unique(col_names1[duplicated(col_names1)]) # Generamos una lista unica de nombres de columnas
+
+data_avg1 <- data.frame(row.names = rownames(data_df1)) # Crea dataframe vacío con largo de filas
   
-  # Identify replicate groups by removing "_N" suffix
-  base_groups <- sub("_\\d+$", "", col_names)
-  unique_groups <- unique(base_groups)
+for (name in unicos1) {
+  data_avg1[[name]] <- rowMeans(data_df1[, colnames(data_df1) == name], na.rm = TRUE)
+} # Itera sobre lista de nombres unicos para determinar promedio
   
-  # Initialize matrix for averaged data
-  averaged_data <- matrix(nrow = nrow(assay_data), ncol = length(unique_groups))
-  rownames(averaged_data) <- rownames(assay_data)
-  colnames(averaged_data) <- unique_groups
-  
-  # Calculate averages for each group
-  for (group in unique_groups) {
-    group_cols <- which(base_groups == group)
-    if (length(group_cols) > 1) {
-      averaged_data[, group] <- rowMeans(assay_data[, group_cols, drop = FALSE], na.rm = TRUE)
-    } else {
-      averaged_data[, group] <- assay_data[, group_cols]
-    }
-  }
-  
-  # Create a new SummarizedExperiment with the averaged data
-  new_se <- SummarizedExperiment(
-    assays = list(averaged = averaged_data),
-    colData = DataFrame(sample = unique_groups),
-    rowData = rowData(se)
-  )
-  
-  return(new_se)
-}
-
-se1 <- se_list$AN005782
-
-# Apply to your first SummarizedExperiment object
-se1_averaged <- average_replicates(se1)
-
-# Verify the dimensions
-dim(se1_averaged)
 ```
 
+Ahora realizamos el mismo ejercicio con el segundo objeto.
 
+```{r echo=TRUE}
+data_df2 <- as.data.frame(assay(se2))
+col_names2 <- se2@colData$sample_source
+row_names2 <- se2@elementMetadata$metabolite_name
 
+colnames(data_df2) <- col_names2 # Se asigan nombres de columnas a dataframe
+rownames(data_df2) <- row_names2 # Se asigan nombres de filas a dataframe
 
-```{r}
-library(SummarizedExperiment)
-library(dplyr)
-library(stringr)
+unicos2 <- unique(col_names2[duplicated(col_names2)]) # Generamos una lista unica de nombres de columnas
 
-# Supongamos que `se_list` es la lista que contiene los objetos SummarizedExperiment
-se1 <- se_list[[1]]  # Tomamos el primer objeto
-
-# Extraer la matriz de datos
-data_matrix <- assay(se1)
-
-# Obtener los nombres de las columnas
-column_names <- colnames(data_matrix)
-
-# Identificar los nombres base de los replicados (sin el "_N")
-base_names <- unique(gsub("_\\d+$", "", column_names))
-
-# Crear un dataframe vacío para almacenar los datos promediados
-averaged_data <- data.frame(matrix(nrow = nrow(data_matrix)))
-
-# Iterar sobre los nombres base y calcular el promedio de los replicados
-for (name in base_names) {
-  # Filtrar las columnas correspondientes al replicado
-  matching_cols <- column_names[grepl(paste0("^", name, "_\\d+$"), column_names)]
+data_avg2 <- data.frame(row.names = rownames(data_df2)) # Crea dataframe vacío con largo de filas
   
-  # Calcular el promedio de los replicados para cada fila
-  averaged_data[, name] <- apply(data_matrix[, ..matching_cols, drop = FALSE], 1, mean, na.rm = TRUE)
-}
-
-# Asegurarse de que la primera columna (si no tiene replicados) se mantenga igual
-#averaged_data[, 1] <- data_matrix[, 1]
-names(averaged_data)[1] <- names(data_matrix)[1]
-
-averaged_data_fix <- select(averaged_data, -Blank_1)
-
+for (name in unicos2) {
+  data_avg2[[name]] <- rowMeans(data_df2[, colnames(data_df2) == name], na.rm = TRUE)
+} # Itera sobre lista de nombres unicos para determinar promedio
+  
 ```
 
-```{r}
-# Suponiendo que `se` es el objeto SummarizedExperiment
-se1 <- se_list$AN005782
-data <- as.data.frame(assay(se1))
-#data <-  averaged_data_fix
+Ahora, teniendo las matrices con promdeios de ambos objetos provenientes de summarizedexperiment, concatenamos los dataframes antes creados en uno solo
 
-# Seleccionar columnas que terminan en '_6h'
-cols_6h <- grep("_6h$", colnames(data), value = TRUE)
-data_6h <- data %>% select(all_of(cols_6h))
 
-# Obtener información de las condiciones experimentales
-metadata <- colData(se1) %>% as.data.frame()
-metadata_6h <- metadata %>% filter(grepl("_6h$", rownames(metadata)))
-
-# Agregar información de condición a los datos
-data_6h_tidy <- data_6h %>% 
-  mutate(metabolite = rownames(.)) %>% 
-  pivot_longer(cols = -metabolite, names_to = "sample", values_to = "value") %>% 
-  left_join(metadata_6h, by = c("sample" = "rownames(metadata)"))
-
-# Estadísticas descriptivas
-summary_stats <- data_6h_tidy %>% 
-  group_by(metabolite, condition) %>% 
-  summarise(mean = mean(value, na.rm = TRUE), 
-            sd = sd(value, na.rm = TRUE), 
-            .groups = "drop")
-
-# Comparación entre condiciones
-if (length(unique(metadata_6h$condition)) > 1) {
-  comparison_results <- data_6h_tidy %>% 
-    group_by(metabolite) %>% 
-    summarise(p_value = t.test(value ~ condition, data = .)$p.value, .groups = "drop") %>% 
-    mutate(adj_p_value = p.adjust(p_value, method = "BH"))
-} else {
-  comparison_results <- data.frame(metabolite = unique(data_6h_tidy$metabolite), 
-                                   p_value = NA, adj_p_value = NA)
-}
-
-# Guardar resultados
-write.csv(summary_stats, "summary_stats_6h.csv", row.names = FALSE)
-write.csv(comparison_results, "comparison_results_6h.csv", row.names = FALSE)
-
-# Visualización de algunos metabolitos seleccionados
-ggplot(data_6h_tidy, aes(x = condition, y = value, fill = condition)) +
-  geom_boxplot() +
-  facet_wrap(~ metabolite, scales = "free") +
-  theme_minimal() +
-  labs(title = "Comparación de niveles de metabolitos a las 6 horas")
+```{r echo=TRUE}
+data_avg <- rbind(data_avg1, data_avg2)
 ```
+
+\tiny 
+```{r echo=TRUE}
+kable(data_avg[1:10,1:5])
+```
+\normalsize
+
+
 
 
 
