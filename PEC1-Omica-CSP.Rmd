@@ -113,6 +113,14 @@ se2 <- se_list$AN005783
 cat('Dimensiones:\n Filas: ',dim(assay(se1))[1], '\n', 'Columnas: ', dim(assay(se1))[2])
 ```
 
+Guardaremos ambos experimentos en archivos binario con extención .Rda
+
+```{r}
+save(se1, file = "ST003521-AN005782.Rda")
+save(se2, file = "ST003521-AN005783.Rda")
+```
+
+
 \tiny
 
 ```{r}
@@ -203,7 +211,7 @@ for (name in unicos2) {
   
 ```
 
-Ahora, teniendo las matrices con promdeios de ambos objetos provenientes de summarizedexperiment, concatenamos los dataframes antes creados en uno solo
+Ahora, teniendo las matrices con promdios de ambos objetos provenientes de summarizedexperiment, concatenamos los dataframes antes creados en uno solo
 
 ```{r echo=TRUE}
 data_avg <- rbind(data_avg1, data_avg2)
@@ -236,9 +244,9 @@ $$
 Calcularemos $log_{2}(FC)$ puesto que en el estudio de este trabajo se realizó así. Esto permitirá comparar con los resultados del artículo.
 
 ```{r echo=TRUE}
-names(data_avg) <- gsub(" ", "", names(data_avg))
+names(data_avg) <- gsub(" ", "", names(data_avg)) # Se eliminan carcactares espacio y - para evitar conflictos en grafica
 names(data_avg) <- gsub("-", "", names(data_avg))
-drops <- c("Control_1h","Control_3h","Control_6h")
+drops <- c("Control_1h","Control_3h","Control_6h") # Elimina Controles. No se usarán en esta gráfica. 
 log2FC_data <- data_avg[ , !(names(data_avg) %in% drops)]
 
 # Calcular log2 Fold Change para cada condición y tiempo
@@ -254,13 +262,11 @@ log2FC_data$Leu10teixobactin_1h <- log2(data_avg$'Leu10teixobactin_1h' / data_av
 log2FC_data$Leu10teixobactin_3h <- log2(data_avg$'Leu10teixobactin_3h' / data_avg$Control_3h)
 log2FC_data$Leu10teixobactin_6h <- log2(data_avg$'Leu10teixobactin_6h' / data_avg$Control_6h)
 
-# Reemplazar valores infinitos o NaN con NA
-log2FC_data <- log2FC_data %>% mutate(across(everything(), ~ ifelse(is.infinite(.) | is.nan(.), NA, .)))
 
-log2FC_data <- log2FC_data %>% replace(is.na(.), 0)
+log2FC_data <- log2FC_data %>% replace(is.na(.), 0) # Reemplaza posibles Na por 0
 
 new_order = c("Combination_1h","PolymyxinB_1h","Leu10teixobactin_1h","Combination_3h","PolymyxinB_3h","Leu10teixobactin_3h","Combination_6h","PolymyxinB_6h","Leu10teixobactin_6h")
-log2FC_data <- log2FC_data[, new_order]
+log2FC_data <- log2FC_data[, new_order] # Se da un orden pra mejor visualizacion
 ```
 
 
@@ -275,26 +281,31 @@ library(dplyr)
 log2FC_data <- log2FC_data %>%
   select(ends_with("_1h"), ends_with("_3h"), ends_with("_6h"))
 
+# Se genera un pequeño set de muestra
 small_set <- log2FC_data[1:100,]
 
 # Convertir a matriz
 matrix_FC <- as.matrix(small_set)
 
-# Crear el heatmap con ajustes para visualización
-Heatmap(matrix_FC,
+# Se crea heatmap con set pequeño
+png(file="heatmap.png")
+ht <- Heatmap(matrix_FC,
         name = 'log2(FC)',
         cluster_rows = TRUE,
         show_row_dend = FALSE ,
-        cluster_columns = FALSE,    # No agrupar columnas (se mantienen en orden por tiempo)
+        cluster_columns = FALSE,
         column_split = rep(c("1h", "3h", "6h"), each = ncol(matrix_FC) / 3),
         border = TRUE, 
-        row_names_side = "left",   # Mueve etiquetas de filas a la izq
+        row_names_side = "left",
         row_names_gp = gpar(fontsize = 2),
         column_names_gp = gpar(fontsize = 4),
-        column_title_gp = gpar(fontsize = 4, fontface = "bold"),# Ajusta tamaño de texto de las etiquetas
-        heatmap_height = unit(11, "cm"),  # Hace el heatmap más largo
-        heatmap_width = unit(8, "cm")    # Ajusta el ancho
+        column_title_gp = gpar(fontsize = 4, fontface = "bold"),
+        heatmap_width = unit(8, "cm")    
 )
+
+draw(ht)
+dev.off()
+ht
 ```
 
 
@@ -303,12 +314,12 @@ Heatmap(matrix_FC,
 
 df_long <- log2FC_data %>%
   rownames_to_column("Metabolite") %>%
-  pivot_longer(cols = -Metabolite, names_to = "Condition", values_to = "log2FC")
+  pivot_longer(cols = -Metabolite, names_to = "Condition", values_to = "log2FC") # Genra nuevo dataframe reordenado para poder graficar
 
 condition_1h <- df_long %>%
-  filter(str_detect(Condition, "_1h"))
+  filter(str_detect(Condition, "_1h")) # Selección de condicion a tiempo 1h
 
-df_short <- condition_1h[1:150,]
+df_short <- condition_1h[1:150,] # Subset
 
 df_short$Group <- case_when(
   grepl("Polymyxin", df_short$Condition) ~ "Polymyxin",
@@ -316,14 +327,15 @@ df_short$Group <- case_when(
   grepl("Combination", df_short$Condition) ~ "Combination")
 
 
-ggplot(df_short, aes(x = log2FC, y = Metabolite, color = Group)) +
+p <- ggplot(df_short, aes(x = log2FC, y = Metabolite, color = Group)) +
   geom_bar(stat = "identity", position = "identity", fill = "white", linewidth = 0.1) +
   scale_color_manual(values = c("Polymyxin" = "blue", "Leu10-teixobactin" = "red", "Combination" = "purple")) +
   theme_minimal() +
   labs(x = "log2(FC)", y = "", color = "") +
   theme(axis.text.y = element_text(size = 6))
 
-
+ggsave(plot=p, filename="barplot.png")
+p
 ```
 
 
